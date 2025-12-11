@@ -14,6 +14,14 @@ from yolo_model import run_yolo_on_page
 app = FastAPI()
 
 
+def pil_to_data_url(img: Image.Image) -> str:
+    """PIL image -> data:image/png;base64,... string."""
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return "data:image/png;base64," + base64.b64encode(buf.read()).decode("utf-8")
+
+
 @app.get("/ping")
 def ping():
     return {"status": "ok"}
@@ -28,22 +36,20 @@ async def analyze_yolo(file: UploadFile = File(...)):
     annotated = result.get("annotated_image")
     crops = result.get("crops", [])
 
-    # Convert annotated PIL image to base64 PNG string
-    annotated_b64 = None
-    if annotated is not None:
-        buf = io.BytesIO()
-        annotated.save(buf, format="PNG")
-        buf.seek(0)
-        annotated_b64 = "data:image/png;base64," + base64.b64encode(buf.read()).decode("utf-8")
+    annotated_b64 = pil_to_data_url(annotated) if annotated is not None else None
 
     detections = []
     for c in crops:
+        crop_img = c.get("crop_image")
+        crop_b64 = pil_to_data_url(crop_img) if crop_img is not None else None
+
         detections.append(
             {
                 "cls_id": c["cls_id"],
                 "cls_name": c["cls_name"],
                 "conf": float(c["conf"]),
-                "box": c["box"],  # [x1, y1, x2, y2]
+                "box": c["box"],                # [x1, y1, x2, y2]
+                "crop_image": crop_b64,         # data:image/png;base64,...
             }
         )
 
